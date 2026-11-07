@@ -867,84 +867,30 @@
   if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', fitSnap);
 
   /* ---------- music ---------- */
-  // A music-box Canon in D (Pachelbel, public domain), played live with Web Audio:
-  // no audio file to download and nothing to license. Starts on the seal tap.
+  // "Congratulations" (piano/rain version), looped. Starts on the seal tap,
+  // since phones only allow sound after a tap. Fades where the browser allows.
   var music = (function () {
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    var ctx, master, wet, timer, nextT = 0, step = 0, playing = false;
-    var BASS = [62, 57, 59, 54, 55, 50, 55, 57];             // D A Bm F#m G D G A
-    var ROOT = [74, 69, 71, 66, 67, 74, 67, 69];
-    var MINOR = [0, 0, 1, 1, 0, 0, 0, 0];
-    var ARP = [[0, 4, 7, 12, 16, 12, 7, 4], [0, 3, 7, 12, 15, 12, 7, 3]];
-    var MEL1 = [90, 88, 86, 85, 83, 81, 83, 85];             // F# E D C# B A B C#
-    var MEL2 = [86, 85, 83, 81, 79, 78, 79, 76];             // D C# B A G F# G E
-    function hz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
-    function build() {
-      ctx = new AC();
-      master = ctx.createGain(); master.gain.value = 0;
-      var tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 3200;
-      // small hall: decaying noise impulse
-      var len = Math.floor(ctx.sampleRate * 2.6), ir = ctx.createBuffer(2, len, ctx.sampleRate);
-      for (var c = 0; c < 2; c++) { var d = ir.getChannelData(c); for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
-      var verb = ctx.createConvolver(); verb.buffer = ir;
-      wet = ctx.createGain(); wet.gain.value = .32;
-      var dry = ctx.createGain(); dry.gain.value = .8;
-      master.connect(tone); tone.connect(dry); tone.connect(verb); verb.connect(wet);
-      dry.connect(ctx.destination); wet.connect(ctx.destination);
+    var a = new Audio('music.mp3');
+    if (!a.canPlayType || !a.canPlayType('audio/mpeg')) return null;
+    a.loop = true; a.preload = 'auto';
+    var playing = false, fade;
+    function ramp(to, ms, done) {
+      clearInterval(fade);
+      var from = a.volume, t0 = Date.now();
+      fade = setInterval(function () {
+        var k = Math.min(1, (Date.now() - t0) / ms);
+        try { a.volume = from + (to - from) * k; } catch (e) {}
+        if (k === 1) { clearInterval(fade); if (done) done(); }
+      }, 50);
     }
-    function bell(t, m, vel, dur) {
-      var g = ctx.createGain();
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(vel, t + .006);
-      g.gain.exponentialRampToValueAtTime(.0005, t + dur);
-      g.connect(master);
-      [[1, 1], [2.002, .22], [3, .06]].forEach(function (h) {
-        var o = ctx.createOscillator(), og = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = hz(m) * h[0]; og.gain.value = h[1];
-        o.connect(og); og.connect(g); o.start(t); o.stop(t + dur + .05);
-      });
-    }
-    function pad(t, m) {
-      var o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
-      o.type = 'triangle'; o.frequency.value = hz(m);
-      f.type = 'lowpass'; f.frequency.value = 700;
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(.11, t + .08);
-      g.gain.exponentialRampToValueAtTime(.0005, t + 2.3);
-      o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + 2.4);
-    }
-    function play(s, t) {
-      var chord = Math.floor(s / 8) % 8, pos = s % 8, loop = Math.floor(s / 64);
-      var part = loop === 0 ? 0 : 1 + (loop - 1) % 3;      // intro, line 1, line 2, both
-      if (pos === 0) {
-        pad(t, BASS[chord]);
-        if (part === 1 || part === 3) bell(t, MEL1[chord], .13, 2.6);
-        if (part === 2 || part === 3) bell(t, MEL2[chord], .11, 2.6);
-      }
-      bell(t, ROOT[chord] + ARP[MINOR[chord]][pos], pos === 0 ? .075 : .055, 1.5);
-    }
-    function tick() { while (nextT < ctx.currentTime + .35) { play(step++, nextT); nextT += .25; } }
     function start() {
-      if (!ctx) build();
-      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} // plays with the iPhone silent switch on
-      if (ctx.resume) ctx.resume();
-      nextT = ctx.currentTime + .12;
-      clearInterval(timer); timer = setInterval(tick, 90); tick();
-      master.gain.cancelScheduledValues(ctx.currentTime);
-      master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
-      master.gain.linearRampToValueAtTime(2.2, ctx.currentTime + 3);
+      try { a.volume = 0; } catch (e) {}
+      var pr = a.play();
+      if (pr && pr.catch) pr.catch(function () { playing = false; setMusicButton(false); });
+      ramp(.7, 2500);
       playing = true;
     }
-    function stop() {
-      if (!ctx) return;
-      master.gain.cancelScheduledValues(ctx.currentTime);
-      master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
-      master.gain.linearRampToValueAtTime(0, ctx.currentTime + .4);
-      clearInterval(timer);
-      setTimeout(function () { if (!playing && ctx.suspend) ctx.suspend(); }, 450);
-      playing = false;
-    }
+    function stop() { playing = false; ramp(0, 400, function () { a.pause(); }); }
     return { start: start, stop: stop, playing: function () { return playing; } };
   })();
   var musicBtn = byId('music'), wantMusic = true;

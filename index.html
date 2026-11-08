@@ -277,9 +277,10 @@
     transition: transform .25s var(--ease), color .2s, border-color .2s;
   }
   .next:hover { color: var(--ink); border-color: var(--ink-soft); }
-  /* When a section is taller than the card, scroll freely: no snapping, no button over the text */
-  .arch.free .next { display: none; }
-  .arch.free .sec { padding-bottom: 32px; }
+  /* When a section is taller than the card, scroll freely, and stop the scroll area above
+     the button so it stays visible and no text can ever slide under it */
+  .arch.free .scroller { bottom: calc(clamp(12px, 2.6vh, 22px) + 44px); }
+  .arch.free .sec { padding-bottom: 20px; }
   .next:active { transform: translateX(-50%) scale(.95); }
   .next svg { width: 14px; height: 14px; transition: transform .4s var(--ease); }
   .next.up svg { transform: rotate(180deg); }
@@ -836,8 +837,8 @@
   });
 
   // Page-by-page snapping only while every section fits the card. If any section is
-  // taller (phone on its side, very large text), scroll freely and drop the button,
-  // so no line is ever covered or out of reach. Measured in the normal state each time.
+  // taller (short phone screen, phone on its side, very large text), scroll freely above
+  // the button, so no line is ever covered or out of reach. Measured in the normal state each time.
   var arch = document.querySelector('.arch');
   function fitSnap() {
     arch.classList.remove('free');
